@@ -1,0 +1,130 @@
+### [安装 docker-ce 社区版本](https://mirrors.tuna.tsinghua.edu.cn/help/docker-ce/)
+---
+
+### nvidia-docker 换源——阿里源
+
+```
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json <<-'EOF'
+{
+  "registry-mirrors": ["https://xj5rp3g7.mirror.aliyuncs.com"]
+}
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+---
+
+### NVIDIA Container Toolkit 安装
+
+> Note that with the release of Docker 19.03, usage of nvidia-docker2 packages are deprecated since NVIDIA GPUs are now natively supported as devices in the Docker runtime.
+
+```
+# 查看 docker 版本是否为 19.03 及以上
+docker --version
+
+# Add the package repositories
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
+```
+---
+
+### nvidia 运行时环境配置
+
+```
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --host=fd:// --add-runtime=nvidia=/usr/bin/nvidia-container-runtime
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+```
+sudo tee /etc/docker/daemon.json <<EOF
+{
+    "runtimes": {
+        "nvidia": {
+            "path": "/usr/bin/nvidia-container-runtime",
+            "runtimeArgs": []
+        }
+    }
+}
+EOF
+sudo pkill -SIGHUP dockerd
+```
+
+---
+
+### 测试 nvidia-docker 是否安装成功
+
+```
+# 测试完后可以删除镜像
+# Test nvidia-smi with the latest official CUDA image
+docker run --gpus all nvidia/cuda:9.0-base nvidia-smi
+
+# Start a GPU enabled container on two GPUs
+docker run --gpus 2 nvidia/cuda:9.0-base nvidia-smi
+```
+
+### 安装开源 centos 镜像
+
+```
+# 下载镜像（cuda9.0 + cudnn7）
+sudo docker pull nvidia/cuda:9.0-cudnn7-devel-centos7
+
+# 安装 nvidia-docker 才能使用 nvidia 环境
+sudo apt-get install nvidia-docker
+
+# 启动镜像，执行一次即可
+# 映射端口
+sudo nvidia-docker run -it -p 8888:8888 -v /home/ahtcm:/root/ahtcm_data -v /media/sata4t:/root/sata4t fd0de7bcd7b0 bash
+
+# 查看显卡型号，显示则安装成功
+nvidia-smi
+
+# Ctrl + P + Q 退出容器，容器继续工作
+# exit 退出容器，容器停止工作
+
+# 启动容器命令，NAME 为容器名
+sudo docker start NAME
+
+# 关闭容器命令，相当于 exit 命令
+sudo docker stop NAME
+
+# 进入容器命令
+sudo docker attach NAME
+
+# 导出容器（备份）
+sudo docker export -o centos-cuda9-cudnn7.tar inspiring_noyce
+
+# 导入容器，生成镜像
+sudo docker import centos-cuda9-cudnn7.tar ahtcm:centos-cuda9.0
+```
+
+---
+
+### docker 容器备份与还原（本地）
+```
+# 操作时最好先 Exit 目标容器
+sudo docker stop conda
+
+# 30b8f18f20b4 为容器 id，conda_backup 为备份镜像
+sudo docker commit -p 30b8f18f20b4 conda_backup
+
+# 查看备份镜像
+sudo docker images
+
+# 备份到本地
+docker save -o ~/conda_backup.tar conda_backup
+
+# 备份镜像恢复
+docker load -i ~/conda_backup.tar
+```

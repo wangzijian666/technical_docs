@@ -1,0 +1,323 @@
+# linux 机器学习配置
+### nvidia 驱动安装
+**注意 cuda 版本与 nvidia 显卡驱动版本需要兼容**
+**由于 anaconda 环境是 cuda9.2 ，因此显卡驱动版本需要 >= 396.37**
+
+[CUDA Toolkit and Compatible Driver Versions 官网说明](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html)
+
+CUDA Toolkit | Linux x86_64 Driver Version
+---|---
+CUDA 10.2.89 | >= 440.33
+CUDA 10.1 (10.1.105 general release, and updates) | >= 418.39
+CUDA 10.0.130 | >= 410.48
+CUDA 9.2 (9.2.148 Update 1) | >= 396.37
+CUDA 9.2 (9.2.88) | >= 396.26
+CUDA 9.1 (9.1.85) | >= 390.46
+CUDA 9.0 (9.0.76) | >= 384.81
+CUDA 8.0 (8.0.61 GA2) | >= 375.26
+CUDA 8.0 (8.0.44) | >= 367.48
+CUDA 7.5 (7.5.16) | >= 352.31
+CUDA 7.0 (7.0.28) | >= 346.46
+
+---
+
+```
+# 禁用 ubuntu 的 nouveau 驱动
+sudo gedit /etc/modprobe.d/blacklist.conf
+# 在配置文件尾部添加下面代码
+blacklist nouveau
+options nouveau modeset=0
+
+# 更新操作
+sudo update-initramfs -u
+# 重启电脑
+reboot
+# 如果没有输出，说明禁用 nouveau 成功
+lsmod | grep nouveau
+
+# 添加执行权限
+sudo chmod a+x NVIDIA-Linux-x86_64-396.82.run 
+# 安装 nvidia 驱动，只有禁用 opengl 这样安装才不会出现循环登陆的问题 
+sudo ./NVIDIA-Linux-x86_64-396.82.run -no-x-check -no-nouveau-check -no-opengl-files
+# 查看 nvidia 显卡是否安装成功
+nvidia-smi
+
+```
+
+---
+
+### cuda 9.2 安装
+
+```
+# 添加执行权限
+sudo chmod a+x cuda_9.2.148_396.37_linux.run
+# 安装 cuda9.2
+sudo ./cuda_9.2.148_396.37_linux.run --no-opengl-libs
+
+# Do you accept the previously read EULA?
+accept
+# Install NVIDIA Accelerated Graphics Driver for Linux-x86_64 396.37?
+n
+# Install the CUDA 9.2 Toolkit?
+y
+# Do you want to install a symbolic link at /usr/local/cuda?
+y
+# Install the CUDA 9.0 Samples?
+n
+
+# 显示 Result = PASS 则表示安装成功
+cd /usr/local/cuda-9.2/samples/1_Utilities/deviceQuery
+sudo make
+./deviceQuery
+
+# 显示 Result = PASS 则表示安装成功
+cd ../bandwidthTest
+sudo make
+./bandwidthTest
+
+# 去掉后缀
+mv cudnn-9.2-linux-x64-v7.6.5.32.tgz.solitairetheme8 cudnn-9.2-linux-x64-v7.6.5.32.tgz
+# 解压
+tar -zxvf cudnn-9.2-linux-x64-v7.6.5.32.tgz
+# 安装 cudann
+sudo cp cuda/include/cudnn.h /usr/local/cuda/include/
+sudo cp cuda/lib64/libcudnn* /usr/local/cuda/lib64/
+sudo chmod a+r /usr/local/cuda/include/cudnn.h
+sudo chmod a+r /usr/local/cuda/lib64/libcudnn*
+
+# 查看是否安装成功
+cat /usr/local/cuda/include/cudnn.h | grep CUDNN_MAJOR -A 2
+
+```
+
+---
+
+### conda 安装后 conda 命令找不到
+
+```
+source ~/.bashrc
+```
+---
+
+### pip 换源
+
+```
+# 修改 ~/.pip/pip.conf (没有就创建一个)，内容如下：
+
+[global]
+index-url = https://mirrors.aliyun.com/pypi/simple/
+```
+
+---
+
+### 将 anaconda 改为清华源
+
+```
+vi ~/.condarc
+
+channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+  - defaults
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+show_channel_urls: true
+```
+
+---
+
+### pycocotools 安装
+
+```
+# 在 conda 子环境安装一下，否则不能使用
+pip install pycocotools
+```
+
+---
+
+### conda 子环境配置
+
+```
+# 创建一个 conda 环境
+conda create -n env_name python=3.6
+
+# 删除一个 conda 环境
+conda remove -n env_name --all
+
+# 查看环境
+conda env list
+
+# 克隆一个环境
+conda create -n zijian_mask --clone mask
+
+# 在 juputer notebook 内添加环境（kernel）
+# 子环境下运行
+conda install ipykernel
+
+# 在子环境下运行，将子环境写入 notebook 的 kernel 中
+python -m ipykernel install --user --name mask --display-name "Python (mask)"
+
+# 在 base 环境下查看所有 kernel
+jupyter kernelspec list
+
+# 在 base 环境下删除指定的 kernel
+jupyter kernelspec remove kernel_name
+
+```
+
+---
+
+### mask_rcnn 环境导出
+
+```
+# 进入子环境，导出所有依赖
+conda env export > mask_rcnn.yaml 
+
+# 根据依赖创建子环境
+conda env create -f mask_rcnn.yaml
+```
+
+---
+
+### jupyter notebook 远程访问设置
+
+```
+# 生成配置文件
+jupyter notebook --generate-config
+
+# 修改 jupyter_notebook_config.py 文件
+# 顺便把默认打开的目录路径配置上去
+vi ~/.jupyter/jupyter_notebook_config.py
+
+c.NotebookApp.allow_remote_access = True
+c.NotebookApp.open_browser = False
+c.NotebookApp.ip = '*'
+c.NotebookApp.notebook_dir = '/root/ahtcm_data'
+
+
+# 配置密码
+jupyter notebook password
+```
+
+---
+
+### opencv-python 安装
+
+Select the correct package for your environment:
+
+There are four different packages and you should select only one of them. Do not install multiple different packages in the same environment. There is no plugin architecture: all the packages use the same namespace (cv2). If you installed multiple different packages in the same environment, uninstall them all with pip uninstall and reinstall only one package.
+
+- a. Packages for standard desktop environments (Windows, macOS, almost any GNU/Linux distribution)
+
+    - run **pip install opencv-python** if you need only main modules
+    - run **pip install opencv-contrib-python** if you need both main and contrib modules (check extra modules listing from OpenCV documentation)
+
+- b. Packages for server (headless) environments. These packages do not contain any GUI functionality. They are smaller and suitable for more restricted environments.
+
+    - run **pip install opencv-python-headless** if you need only main modules
+    - run **pip install opencv-contrib-python-headless** if you need both main and contrib modules (check extra modules listing from OpenCV documentation)
+
+---
+
+### jupyter 美化代码
+
+```
+# 在 base 环境添加 jupyter 插件，应当在 base 环境下启动 jupyter
+conda install -c conda-forge jupyter_contrib_nbextensions
+
+# 在所需要的环境中安装 autopep8 代码风格库
+conda install autopep8
+
+#  将 custom 文件夹拷贝到 ~/.jupyter 目录下，修改 jupyter 页面主题
+
+# 如果 jupyter 是中文，则更改 jupyter 为英语
+vi ~/.bashrc
+
+# 在尾部添加下面语句
+LANG="en_US.UTF-8"
+
+# 重启生效
+source ~/.bashrc
+```
+
+---
+
+### ubuntu vim 注释颜色优化
+
+```
+# 运行下列命令即可，注意以下代码只会修改当前用户的注释颜色
+echo "hi comment ctermbg=4 ctermfg=6" >> ~/.vimrc
+```
+
+---
+
+### yum 换阿里源
+
+```
+# 备份
+mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+
+# 下载
+curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+
+yum clean all
+yum makecache
+
+# 将文件中的所有 http 开头的地址更改为 https（可省）
+vi /etc/yum.repos.d/CentOS-Base.repo
+
+yum update
+```
+
+### ubuntu16.04 换清华源
+
+```
+# 换阿里源不太靠谱
+
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse
+```
+
+
+---
+
+### ipywidgets 安装
+
+```
+# conda 根环境安装
+conda install ipywidgets=7.5
+```
+
+---
+
+
+### 设置登录后自动进入 docker
+
+```
+vim ~/.bashrc
+
+# command
+cat /home/ahtcm/welcom-to-docker
+sudo docker ps -a
+sudo docker attach conda
+
+source ~/.bashrc
+```
+
+---
+
+### teamviewer 安装
+
+```
+# 为了确认接收用户许可，需要添加以下代码。
+# 因为是命令行，没有 ui 界面，不能用鼠标点击接收用户许可，故在设置里接收。
+vim /opt/teamviewer/config/global.conf
+
+[int32] EulaAccepted = 1
+[int32] EulaAcceptedRevision = 6
+
+# 重启 daemon 即可
+teamviewer --daemon restart
+```
